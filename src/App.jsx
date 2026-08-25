@@ -65,63 +65,51 @@ const FontLoader = () => (
     @keyframes gentlePulse { 0%, 100% { box-shadow: 0 6px 18px rgba(243,113,33,0.25); } 50% { box-shadow: 0 6px 26px rgba(243,113,33,0.5); } }
     .pulse-glow { animation: gentlePulse 1.8s ease-in-out infinite; }
 
-    /* ---- Intro : 3 curls de biceps, sortie à gauche, "Bonne séance" ---- */
-    @keyframes curlForearm {
-      0%   { transform: rotate(0deg); }
-      8%   { transform: rotate(0deg); }
-      23%  { transform: rotate(-118deg); }
-      33%  { transform: rotate(-118deg); }
-      48%  { transform: rotate(0deg); }
-      56%  { transform: rotate(0deg); }
-      71%  { transform: rotate(-118deg); }
-      81%  { transform: rotate(-118deg); }
-      94%  { transform: rotate(0deg); }
-      100% { transform: rotate(-118deg); }
+    /* ---- Intro : la barre se charge de disques, puis un grand lever avec flash ---- */
+    @keyframes slideInLeft {
+      0%   { transform: translateX(-70px); opacity: 0; }
+      70%  { transform: translateX(5px); opacity: 1; }
+      100% { transform: translateX(0); opacity: 1; }
     }
-    .forearm-group { animation: curlForearm 2.6s ease-in-out both; }
+    @keyframes slideInRight {
+      0%   { transform: translateX(70px); opacity: 0; }
+      70%  { transform: translateX(-5px); opacity: 1; }
+      100% { transform: translateX(0); opacity: 1; }
+    }
+    .plate-L1, .plate-L2, .plate-L3 { transform-box: fill-box; transform-origin: center; animation: slideInLeft 0.35s ease-out both; }
+    .plate-R1, .plate-R2, .plate-R3 { transform-box: fill-box; transform-origin: center; animation: slideInRight 0.35s ease-out both; }
+    .plate-L1, .plate-R1 { animation-delay: 0.1s; }
+    .plate-L2, .plate-R2 { animation-delay: 0.35s; }
+    .plate-L3, .plate-R3 { animation-delay: 0.6s; }
 
-    @keyframes bicepGrow {
-      0%   { transform: scale(0.55); }
-      8%   { transform: scale(0.55); }
-      23%  { transform: scale(1.18); }
-      33%  { transform: scale(1.18); }
-      48%  { transform: scale(0.55); }
-      56%  { transform: scale(0.55); }
-      71%  { transform: scale(1.18); }
-      81%  { transform: scale(1.18); }
-      94%  { transform: scale(0.55); }
-      100% { transform: scale(1.18); }
+    @keyframes barbellLift {
+      0%   { transform: translateY(0); opacity: 1; }
+      55%  { transform: translateY(-16px); opacity: 1; }
+      75%  { transform: translateY(-16px); opacity: 1; }
+      100% { transform: translateY(-32px); opacity: 0; }
     }
-    .bicep-bulge { transform-box: fill-box; transform-origin: center; animation: bicepGrow 2.6s ease-in-out both; }
+    .barbell-lift { transform-box: fill-box; animation: barbellLift 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) both; animation-delay: 1s; }
 
-    @keyframes logoExitLeft {
-      from { transform: translateX(-50%) translateX(0); opacity: 1; }
-      to { transform: translateX(-50%) translateX(-170px); opacity: 0; }
+    @keyframes flashBurst {
+      0%, 58% { transform: scale(0.2); opacity: 0; }
+      75%     { transform: scale(1); opacity: 0.9; }
+      100%    { transform: scale(1.9); opacity: 0; }
     }
-    .curl-logo-wrap { animation: logoExitLeft 0.6s cubic-bezier(0.5, 0, 0.85, 0.35) both; animation-delay: 2.65s; }
+    .flash-burst { transform-box: fill-box; transform-origin: center; animation: flashBurst 0.9s ease-out both; animation-delay: 1.05s; }
 
-    @keyframes trailStreak {
-      0%   { width: 0; opacity: 0; }
-      20%  { width: 90px; opacity: 0.9; }
-      55%  { width: 190px; opacity: 0.55; }
-      100% { width: 230px; opacity: 0; }
-    }
-    .trail {
-      position: absolute;
-      top: 50%;
-      left: 100%;
-      transform: translateY(-50%);
-      height: 7px;
-      width: 0;
-      border-radius: 4px;
-      background: linear-gradient(90deg, var(--accent), transparent);
-      opacity: 0;
-      animation: trailStreak 1.9s ease-out both;
-      animation-delay: 2.65s;
-    }
+    @keyframes cestPartiIn { from { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.9); } to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
+    .cest-parti { opacity: 0; animation: cestPartiIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; animation-delay: 1.9s; }
 
-    @keyframes bonneSeanceIn { from { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.94); } to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
-    .bonne-seance { opacity: 0; animation: bonneSeanceIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; animation-delay: 3.1s; }
+    /* ---- Intro v2 : muscle-up à la barre, 3 poses en fondu enchaîné ---- */
+    @keyframes poseHang { 0% { opacity: 1; } 42% { opacity: 1; } 58% { opacity: 0; } 100% { opacity: 0; } }
+    @keyframes posePull { 0% { opacity: 0; } 42% { opacity: 0; } 58% { opacity: 1; } 82% { opacity: 1; } 96% { opacity: 0; } 100% { opacity: 0; } }
+    @keyframes poseLock { 0% { opacity: 0; } 82% { opacity: 0; } 96% { opacity: 1; } 100% { opacity: 1; } }
+    .pose-hang { animation: poseHang 1.9s ease-in-out both; }
+    .pose-pull { animation: posePull 1.9s ease-in-out both; }
+    .pose-lock { animation: poseLock 1.9s ease-in-out both; }
+
+    @keyframes flashBurst2 { 0%, 78% { transform: scale(0.2); opacity: 0; } 92% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(1.8); opacity: 0; } }
+    .flash-burst2 { transform-box: fill-box; transform-origin: center; animation: flashBurst2 1.9s ease-out both; }
 
     @keyframes dotBounce { 0%, 80%, 100% { transform: translateY(0); opacity: 0.4; } 40% { transform: translateY(-6px); opacity: 1; } }
     .splash-dot {
@@ -388,6 +376,8 @@ const EXERCISE_ICON_MAP = {
   "Vélo elliptique": "elliptical",
   "Course tapis": "treadmill",
   "Burpees": "bodyweight",
+  "Mountain climbers": "plank",
+  "Russian twist": "plank",
 };
 
 function getExerciseIcon(name, group) {
@@ -431,6 +421,8 @@ const EXERCISE_MUSCLES = {
   "Vélo elliptique": { primary: ["Quadriceps", "Ischio-jambiers"], secondary: ["Cardio"] },
   "Course tapis": { primary: ["Quadriceps", "Mollets"], secondary: ["Cardio"] },
   "Burpees": { primary: ["Full body"], secondary: ["Cardio"] },
+  "Mountain climbers": { primary: ["Abdos", "Transverse"], secondary: ["Cardio", "Épaules"] },
+  "Russian twist": { primary: ["Obliques"], secondary: ["Transverse"] },
 };
 
 const GROUP_FALLBACK_MUSCLES = {
@@ -574,7 +566,7 @@ const NATHAN_PROGRAM = [
   },
   {
     id: "nathan-3",
-    weekday: "Vendredi",
+    weekday: "Jeudi",
     group: "Jambes",
     nathan: true,
     exercises: [
@@ -586,12 +578,17 @@ const NATHAN_PROGRAM = [
   },
   {
     id: "nathan-4",
-    weekday: "Dimanche",
+    weekday: "Samedi",
     group: "Cardio",
     nathan: true,
     exercises: [
       { id: "n16", name: "Cardio", sets: 1, reps: "20-30 min", rest: "—", note: "Vélo, rameur, tapis, elliptique, etc. Intensité 5–6/10 — modéré pour préserver la prise de masse." },
-      { id: "n17", name: "Circuit abdos", sets: 1, reps: "10-15 min", rest: "—", note: "Vidéo YouTube adaptée au niveau (ex. Tibo InShape ou autre chaîne)." },
+      { id: "n17", name: "Crunch", sets: 3, reps: "15-20", rest: "20s", note: "Circuit abdos (~12 min) : enchaîne les 6 exercices avec 20s de repos entre chaque, 2 à 3 tours. Descente contrôlée, pas d'à-coups sur la nuque." },
+      { id: "n17b", name: "Relevé de jambes", sets: 3, reps: "12-15", rest: "20s", note: "Bas du ventre. Jambes tendues ou légèrement fléchies, bassin qui décolle en fin de mouvement." },
+      { id: "n17c", name: "Gainage planche", sets: 3, reps: "30-45s", rest: "20s", note: "Dos plat, bassin ni trop haut ni trop bas, respiration continue." },
+      { id: "n17d", name: "Gainage latéral", sets: 3, reps: "20-30s/côté", rest: "20s", note: "Corps aligné, hanche qui ne s'affaisse pas vers le sol." },
+      { id: "n17e", name: "Mountain climbers", sets: 3, reps: "30s", rest: "20s", note: "Rythme soutenu, gainage maintenu, genoux vers la poitrine." },
+      { id: "n17f", name: "Russian twist", sets: 3, reps: "20 (10/côté)", rest: "20s", note: "Rotation du buste, pieds au sol ou levés pour plus de difficulté." },
       { id: "n18", name: "Mobilité légère", sets: 1, reps: "5-10 min", rest: "—", note: "Optionnelle. Mobilité légère, sans créer de fatigue supplémentaire." },
     ],
   },
@@ -643,7 +640,7 @@ const DAVID_PROGRAM = [
   },
   {
     id: "david-3",
-    weekday: "Vendredi",
+    weekday: "Jeudi",
     group: "Jambes",
     david: true,
     exercises: [
@@ -655,12 +652,17 @@ const DAVID_PROGRAM = [
   },
   {
     id: "david-4",
-    weekday: "Dimanche",
+    weekday: "Samedi",
     group: "Cardio",
     david: true,
     exercises: [
       { id: "d16", name: "Cardio", sets: 1, reps: "30-35 min", rest: "—", note: "Vélo, rameur, tapis, elliptique, SkiErg ou autre machine disponible. Intensité 5–6/10." },
-      { id: "d17", name: "Circuit abdos", sets: 1, reps: "10-15 min", rest: "—", note: "Vidéo YouTube adaptée au niveau (ex. Tibo InShape ou autre chaîne)." },
+      { id: "d17", name: "Crunch", sets: 3, reps: "15-20", rest: "20s", note: "Circuit abdos (~12 min) : enchaîne les 6 exercices avec 20s de repos entre chaque, 2 à 3 tours. Descente contrôlée, pas d'à-coups sur la nuque." },
+      { id: "d17b", name: "Relevé de jambes", sets: 3, reps: "12-15", rest: "20s", note: "Bas du ventre. Jambes tendues ou légèrement fléchies, bassin qui décolle en fin de mouvement." },
+      { id: "d17c", name: "Gainage planche", sets: 3, reps: "30-45s", rest: "20s", note: "Dos plat, bassin ni trop haut ni trop bas, respiration continue." },
+      { id: "d17d", name: "Gainage latéral", sets: 3, reps: "20-30s/côté", rest: "20s", note: "Corps aligné, hanche qui ne s'affaisse pas vers le sol." },
+      { id: "d17e", name: "Mountain climbers", sets: 3, reps: "30s", rest: "20s", note: "Rythme soutenu, gainage maintenu, genoux vers la poitrine." },
+      { id: "d17f", name: "Russian twist", sets: 3, reps: "20 (10/côté)", rest: "20s", note: "Rotation du buste, pieds au sol ou levés pour plus de difficulté." },
     ],
   },
 ];
@@ -822,64 +824,109 @@ function AppLogoDumbbell({ size = 64 }) {
 // ---------- Écran de lancement ----------
 // Bras stylisé qui fait un curl : avant-bras plié progressivement autour du
 // coude, biceps qui gonfle en même temps — l'animation d'intro de l'app.
-function CurlLogo({ size = 140 }) {
+// Une barre de musculation qui se charge de disques un par un, de chaque
+// côté, avant un grand lever final avec un flash d'énergie.
+function BarbellLoadLogo({ size = 140 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" style={{ overflow: "visible" }}>
+    <svg width={size * 2.2} height={size} viewBox="0 0 300 140" style={{ overflow: "visible" }}>
       <defs>
-        <linearGradient id="skinGrad" x1="0.15" y1="0" x2="0.9" y2="1">
-          <stop offset="0%" stopColor="#E7B48A" />
-          <stop offset="55%" stopColor="#D29964" />
-          <stop offset="100%" stopColor="#AD7444" />
-        </linearGradient>
-        <radialGradient id="bicepShade" cx="35%" cy="30%" r="75%">
-          <stop offset="0%" stopColor="#F0C79C" stopOpacity="0.9" />
-          <stop offset="55%" stopColor="#D29964" stopOpacity="0" />
-        </radialGradient>
-        <linearGradient id="dumbbellGrad2" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#E4E8EB" />
+        <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#E8ECEF" />
+          <stop offset="50%" stopColor="#AFB6BC" />
           <stop offset="100%" stopColor="#6B7278" />
         </linearGradient>
+        <linearGradient id="plateGrad2" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#3A3F44" />
+          <stop offset="100%" stopColor="#17191C" />
+        </linearGradient>
+        <radialGradient id="flashGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.9" />
+          <stop offset="60%" stopColor="var(--accent)" stopOpacity="0.25" />
+          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+        </radialGradient>
       </defs>
 
-      {/* moignon très court, juste pour ancrer le biceps — pas de corps */}
-      <circle cx="60" cy="72" r="14" fill="url(#skinGrad)" />
+      {/* flash d'énergie au moment du lever */}
+      <circle className="flash-burst" cx="150" cy="65" r="70" fill="url(#flashGrad)" />
 
-      {/* biceps organique (pas un cercle parfait), qui gonfle */}
-      <path
-        className="bicep-bulge"
-        d="M48 45
-           C46 36 54 29 64 30
-           C75 31 82 39 81 49
-           C80 58 73 65 63 66
-           C53 67 50 55 48 45 Z"
-        fill="url(#skinGrad)"
-      />
-      <path className="bicep-bulge" d="M50 42 C50 35 57 30 65 31 C72 32 77 37 78 44 C71 40 60 39 50 42 Z" fill="url(#bicepShade)" />
-      {/* plis de muscle, subtils */}
-      <path className="bicep-bulge" d="M53 55 Q65 63 76 54" stroke="#9C6539" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.4" />
-      <path className="bicep-bulge" d="M55 60 Q65 66 74 59" stroke="#9C6539" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity="0.3" />
+      {/* toute la barre se soulève d'un coup à la fin */}
+      <g className="barbell-lift">
+        {/* barre centrale */}
+        <rect x="90" y="60" width="120" height="10" rx="4" fill="url(#barGrad)" />
 
-      {/* avant-bras + poing + haltère, pivote autour du coude */}
-      <g className="forearm-group" style={{ transformOrigin: "54px 50px" }}>
-        <path
-          d="M47 48
-             C46 48 44 50 44 54
-             L41 82
-             C40 89 46 95 55 95
-             C64 95 70 89 69 82
-             L67 54
-             C67 50 65 48 63 48 Z"
-          fill="url(#skinGrad)"
-        />
-        {/* poing */}
-        <circle cx="55" cy="93" r="14" fill="url(#skinGrad)" />
-        <ellipse cx="50" cy="87" rx="4.5" ry="3.5" fill="#F0C79C" opacity="0.7" />
-        <path d="M43 92 Q55 100 67 92" stroke="#9C6539" strokeWidth="1.5" fill="none" strokeLinecap="round" opacity="0.35" />
-        <path d="M47 84 L47 90 M55 82 L55 89 M63 84 L63 90" stroke="#9C6539" strokeWidth="1" opacity="0.25" strokeLinecap="round" />
-        {/* haltère tenu dans le poing */}
-        <rect x="27" y="86" width="10" height="15" rx="3" fill="url(#dumbbellGrad2)" />
-        <rect x="73" y="86" width="10" height="15" rx="3" fill="url(#dumbbellGrad2)" />
-        <rect x="33" y="90" width="44" height="6" rx="3" fill="url(#dumbbellGrad2)" />
+        {/* disques côté gauche, du plus petit (proche centre) au plus grand */}
+        <rect className="plate-L1" x="76" y="42" width="14" height="46" rx="4" fill="url(#plateGrad2)" stroke="var(--accent)" strokeWidth="1.5" />
+        <rect className="plate-L2" x="58" y="35" width="16" height="60" rx="4" fill="url(#plateGrad2)" stroke="var(--accent)" strokeWidth="1.5" />
+        <rect className="plate-L3" x="38" y="28" width="18" height="74" rx="5" fill="url(#plateGrad2)" stroke="var(--accent)" strokeWidth="1.5" />
+
+        {/* disques côté droit, symétrique */}
+        <rect className="plate-R1" x="210" y="42" width="14" height="46" rx="4" fill="url(#plateGrad2)" stroke="var(--accent)" strokeWidth="1.5" />
+        <rect className="plate-R2" x="226" y="35" width="16" height="60" rx="4" fill="url(#plateGrad2)" stroke="var(--accent)" strokeWidth="1.5" />
+        <rect className="plate-R3" x="244" y="28" width="18" height="74" rx="5" fill="url(#plateGrad2)" stroke="var(--accent)" strokeWidth="1.5" />
+      </g>
+    </svg>
+  );
+}
+
+// Version 2 : un bonhomme (silhouette trait, même langage que les
+// pictogrammes de l'app) qui enchaîne un muscle-up à la barre — traction,
+// passage au-dessus, puis verrouillage bras tendus au-dessus de la barre.
+// Trois poses fixes qui se fondent l'une dans l'autre (crossfade), plutôt
+// qu'une articulation complexe.
+function MuscleUpLogo({ size = 140 }) {
+  const s = "var(--accent)";
+  return (
+    <svg width={size} height={size} viewBox="0 0 140 160" style={{ overflow: "visible" }}>
+      <defs>
+        <linearGradient id="barGrad3" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#E8ECEF" />
+          <stop offset="50%" stopColor="#AFB6BC" />
+          <stop offset="100%" stopColor="#6B7278" />
+        </linearGradient>
+        <radialGradient id="flashGrad3" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.9" />
+          <stop offset="60%" stopColor="var(--accent)" stopOpacity="0.25" />
+          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      {/* barre fixe, ne bouge jamais */}
+      <rect x="28" y="42" width="84" height="7" rx="3.5" fill="url(#barGrad3)" />
+      <circle cx="45" cy="45.5" r="4" fill="#2A2E33" />
+      <circle cx="85" cy="45.5" r="4" fill="#2A2E33" />
+
+      {/* flash d'énergie au moment du verrouillage final */}
+      <circle className="flash-burst2" cx="65" cy="30" r="55" fill="url(#flashGrad3)" />
+
+      {/* Pose 1 — suspension bras tendus */}
+      <g className="pose-hang" strokeLinecap="round">
+        <circle cx="65" cy="60" r="9" fill="none" stroke={s} strokeWidth="3" />
+        <line x1="45" y1="45" x2="65" y2="72" stroke={s} strokeWidth="3" />
+        <line x1="85" y1="45" x2="65" y2="72" stroke={s} strokeWidth="3" />
+        <line x1="65" y1="72" x2="65" y2="112" stroke={s} strokeWidth="3" />
+        <line x1="65" y1="112" x2="56" y2="150" stroke={s} strokeWidth="3" />
+        <line x1="65" y1="112" x2="74" y2="150" stroke={s} strokeWidth="3" />
+      </g>
+
+      {/* Pose 2 — traction, menton à la barre, jambes qui se replient */}
+      <g className="pose-pull" strokeLinecap="round">
+        <circle cx="68" cy="49" r="9" fill="none" stroke={s} strokeWidth="3" />
+        <line x1="45" y1="45" x2="68" y2="58" stroke={s} strokeWidth="3" />
+        <line x1="85" y1="45" x2="68" y2="58" stroke={s} strokeWidth="3" />
+        <line x1="68" y1="58" x2="62" y2="88" stroke={s} strokeWidth="3" />
+        <line x1="62" y1="88" x2="48" y2="100" stroke={s} strokeWidth="3" />
+        <line x1="62" y1="88" x2="78" y2="98" stroke={s} strokeWidth="3" />
+      </g>
+
+      {/* Pose 3 — verrouillage, corps au-dessus de la barre */}
+      <g className="pose-lock" strokeLinecap="round">
+        <circle cx="65" cy="20" r="9" fill="none" stroke={s} strokeWidth="3" />
+        <line x1="65" y1="29" x2="65" y2="42" stroke={s} strokeWidth="3" />
+        <line x1="65" y1="38" x2="45" y2="45" stroke={s} strokeWidth="3" />
+        <line x1="65" y1="38" x2="85" y2="45" stroke={s} strokeWidth="3" />
+        <line x1="65" y1="42" x2="60" y2="78" stroke={s} strokeWidth="3" />
+        <line x1="60" y1="78" x2="53" y2="112" stroke={s} strokeWidth="3" />
+        <line x1="60" y1="78" x2="67" y2="112" stroke={s} strokeWidth="3" />
       </g>
     </svg>
   );
@@ -952,18 +999,17 @@ function SplashScreen({ leaving }) {
     >
       <FontLoader />
       <GrayPlants />
-      <div style={{ "--accent": "#F37121", "--accent-dark": "#C2560F", position: "relative", width: 160, height: 130, zIndex: 1 }}>
-        <div className="curl-logo-wrap" style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)" }}>
-          <span className="trail" />
-          <CurlLogo size={112} />
+      <div style={{ "--accent": "#F37121", "--accent-dark": "#C2560F", position: "relative", width: 300, height: 140, zIndex: 1 }}>
+        <div className="barbell-wrap" style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)" }}>
+          <BarbellLoadLogo size={140} />
         </div>
-        <div className="bonne-seance" style={{ position: "absolute", top: 40, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", textAlign: "center" }}>
-          <div style={{ fontFamily: "'Caveat', cursive", fontWeight: 700, fontSize: 42, color: "#F5F6F3", lineHeight: 1 }}>
-            Bonne séance 💪
+        <div className="cest-parti" style={{ position: "absolute", top: 46, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", textAlign: "center" }}>
+          <div style={{ fontFamily: "'Caveat', cursive", fontWeight: 700, fontSize: 46, color: "#F5F6F3", lineHeight: 1 }}>
+            C'est parti 🔥
           </div>
         </div>
       </div>
-      <div className="splash-dots" style={{ display: "flex", gap: 6, marginTop: 30, zIndex: 1 }}>
+      <div className="splash-dots" style={{ display: "flex", gap: 6, marginTop: 34, zIndex: 1 }}>
         <span className="splash-dot" style={{ animationDelay: "0s" }} />
         <span className="splash-dot" style={{ animationDelay: "0.15s" }} />
         <span className="splash-dot" style={{ animationDelay: "0.3s" }} />
@@ -1014,8 +1060,8 @@ export default function SportApp() {
   const [splashLeaving, setSplashLeaving] = useState(false);
 
   useEffect(() => {
-    const t1 = setTimeout(() => setSplashLeaving(true), 5000);
-    const t2 = setTimeout(() => setShowSplash(false), 5400);
+    const t1 = setTimeout(() => setSplashLeaving(true), 2900);
+    const t2 = setTimeout(() => setShowSplash(false), 3300);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
