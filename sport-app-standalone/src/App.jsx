@@ -350,6 +350,8 @@ const EXERCISE_ICON_MAP = {
   "Extension triceps poulie": "cable_high",
   "Barre au front": "cable_high",
   "Dips assisté": "assisted_dip",
+  "Dips assistés": "assisted_dip",
+  "Dips assistés / australiennes": "assisted_dip",
   "Dips": "assisted_dip",
   "Écarté haltères": "dumbbell",
   "Tirage vertical": "cable_high",
@@ -378,6 +380,18 @@ const EXERCISE_ICON_MAP = {
   "Burpees": "bodyweight",
   "Mountain climbers": "plank",
   "Russian twist": "plank",
+  "Tractions": "cable_high",
+  "Tractions assistées / australiennes": "cable_high",
+  "Curl supination": "dumbbell",
+  "Chest Press": "bench_flat",
+  "Pec Fly": "pec_deck",
+  "Extension triceps à la poulie": "cable_high",
+  "Machine à triceps": "cable_high",
+  "Squat": "squat_rack",
+  "Leg Curl": "leg_curl",
+  "Leg Extension": "leg_extension",
+  "Cardio": "cardio",
+  "Mobilité légère": "plank",
 };
 
 function getExerciseIcon(name, group) {
@@ -395,6 +409,8 @@ const EXERCISE_MUSCLES = {
   "Extension triceps poulie": { primary: ["Triceps"], secondary: [] },
   "Barre au front": { primary: ["Triceps"], secondary: [] },
   "Dips assisté": { primary: ["Triceps", "Bas des pectoraux"], secondary: ["Deltoïde antérieur"] },
+  "Dips assistés": { primary: ["Triceps", "Bas des pectoraux"], secondary: ["Deltoïde antérieur"] },
+  "Dips assistés / australiennes": { primary: ["Triceps", "Bas des pectoraux", "Grand dorsal"], secondary: ["Deltoïde antérieur", "Biceps"] },
   "Dips": { primary: ["Triceps", "Bas des pectoraux"], secondary: ["Deltoïde antérieur"] },
   "Écarté haltères": { primary: ["Grand pectoral"], secondary: ["Deltoïde antérieur"] },
   "Tirage vertical": { primary: ["Grand dorsal"], secondary: ["Biceps", "Trapèzes"] },
@@ -423,6 +439,17 @@ const EXERCISE_MUSCLES = {
   "Burpees": { primary: ["Full body"], secondary: ["Cardio"] },
   "Mountain climbers": { primary: ["Abdos", "Transverse"], secondary: ["Cardio", "Épaules"] },
   "Russian twist": { primary: ["Obliques"], secondary: ["Transverse"] },
+  "Tractions": { primary: ["Grand dorsal"], secondary: ["Biceps", "Trapèzes"] },
+  "Tractions assistées / australiennes": { primary: ["Grand dorsal"], secondary: ["Biceps", "Trapèzes"] },
+  "Curl supination": { primary: ["Biceps"], secondary: ["Avant-bras"] },
+  "Chest Press": { primary: ["Grand pectoral"], secondary: ["Triceps", "Deltoïde antérieur"] },
+  "Pec Fly": { primary: ["Grand pectoral"], secondary: [] },
+  "Extension triceps à la poulie": { primary: ["Triceps"], secondary: [] },
+  "Machine à triceps": { primary: ["Triceps"], secondary: [] },
+  "Squat": { primary: ["Quadriceps", "Fessiers"], secondary: ["Ischio-jambiers", "Gainage"] },
+  "Leg Curl": { primary: ["Ischio-jambiers"], secondary: [] },
+  "Leg Extension": { primary: ["Quadriceps"], secondary: [] },
+  "Mobilité légère": { primary: ["Mobilité articulaire"], secondary: [] },
 };
 
 const GROUP_FALLBACK_MUSCLES = {
@@ -682,6 +709,27 @@ function parseRepsNumber(reps) {
   if (!reps) return null;
   const m = String(reps).match(/\d+/);
   return m ? Number(m[0]) : null;
+}
+
+// Convertit un temps de repos texte ("1 min 30", "20s", "90") en secondes.
+// Renvoie null si aucun repos n'est applicable (ex. "—" ou absent).
+function parseRestSeconds(rest) {
+  if (!rest || rest === "—") return null;
+  const str = String(rest);
+  let total = 0;
+  const minM = str.match(/(\d+)\s*min/);
+  if (minM) total += parseInt(minM[1], 10) * 60;
+  const secAfterMin = str.match(/min\D*(\d+)/);
+  if (minM && secAfterMin) total += parseInt(secAfterMin[1], 10);
+  else if (!minM) {
+    const secM = str.match(/(\d+)\s*s\b/);
+    if (secM) total += parseInt(secM[1], 10);
+    else {
+      const bare = str.match(/^(\d+)$/);
+      if (bare) total += parseInt(bare[1], 10);
+    }
+  }
+  return total > 0 ? total : null;
 }
 
 function uid() {
@@ -1059,6 +1107,90 @@ export default function SportApp() {
   const [showSplash, setShowSplash] = useState(true);
   const [splashLeaving, setSplashLeaving] = useState(false);
 
+  // Chrono de repos partagé dans toute l'app : démarré automatiquement
+  // quand on valide une série, avec retour auto à la séance à la fin.
+  const [restDuration, setRestDuration] = useState(90);
+  const [restRemaining, setRestRemaining] = useState(90);
+  const [restRunning, setRestRunning] = useState(false);
+  const [restAutoReturn, setRestAutoReturn] = useState(false);
+  const restIntervalRef = useRef(null);
+
+  const playDing = () => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const ding = (delay) => {
+        const startAt = ctx.currentTime + delay;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, startAt);
+        gain.gain.exponentialRampToValueAtTime(0.28, startAt + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 1.1);
+        gain.connect(ctx.destination);
+        const fundamental = ctx.createOscillator();
+        fundamental.type = "sine";
+        fundamental.frequency.setValueAtTime(1046.5, startAt);
+        fundamental.connect(gain);
+        fundamental.start(startAt);
+        fundamental.stop(startAt + 1.1);
+        const fifth = ctx.createOscillator();
+        fifth.type = "sine";
+        fifth.frequency.setValueAtTime(1568, startAt);
+        const fifthGain = ctx.createGain();
+        fifthGain.gain.setValueAtTime(0.12, startAt);
+        fifthGain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.7);
+        fifth.connect(fifthGain).connect(ctx.destination);
+        fifth.start(startAt);
+        fifth.stop(startAt + 0.7);
+      };
+      ding(0);
+      ding(0.35);
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    if (restRunning) {
+      restIntervalRef.current = setInterval(() => {
+        setRestRemaining((r) => {
+          if (r <= 1) {
+            clearInterval(restIntervalRef.current);
+            setRestRunning(false);
+            try {
+              if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+            } catch (e) {}
+            playDing();
+            return 0;
+          }
+          return r - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(restIntervalRef.current);
+  }, [restRunning]);
+
+  // Quand le chrono atteint 0 et qu'il a été lancé automatiquement (après une
+  // série), on revient à la séance après un court instant pour laisser le
+  // temps de voir "Repos terminé".
+  useEffect(() => {
+    if (restRemaining === 0 && restAutoReturn) {
+      const t = setTimeout(() => {
+        setRestAutoReturn(false);
+        setView("jour");
+      }, 1400);
+      return () => clearTimeout(t);
+    }
+  }, [restRemaining, restAutoReturn]);
+
+  // Démarre le chrono de repos avec la durée de l'exercice (ou la dernière
+  // durée utilisée à défaut), bascule sur l'écran chrono, et note qu'il faudra
+  // revenir automatiquement à la séance une fois le repos terminé.
+  const startRestTimer = (restLabel) => {
+    const seconds = parseRestSeconds(restLabel) || restDuration;
+    setRestDuration(seconds);
+    setRestRemaining(seconds);
+    setRestRunning(true);
+    setRestAutoReturn(true);
+    setView("chrono");
+  };
+
   useEffect(() => {
     const t1 = setTimeout(() => setSplashLeaving(true), 2900);
     const t2 = setTimeout(() => setShowSplash(false), 3300);
@@ -1143,6 +1275,11 @@ export default function SportApp() {
       const nextWeightLogs = { ...weightLogs, [exId]: nextHistory };
       setWeightLogs(nextWeightLogs);
       persist(STORAGE_KEY_WEIGHTLOGS, nextWeightLogs);
+    }
+    // Lance automatiquement le chrono de repos, sauf pour les exercices sans
+    // repos défini (cardio/mobilité en minutes, ex.rest === "—").
+    if (ex.rest !== "—") {
+      startRestTimer(ex.rest);
     }
   };
 
@@ -1395,7 +1532,18 @@ export default function SportApp() {
           <MusclesView program={program} validatedDays={validatedDays} today={today} />
         )}
 
-        {view === "chrono" && <ChronoView />}
+        {view === "chrono" && (
+          <ChronoView
+            duration={restDuration}
+            remaining={restRemaining}
+            running={restRunning}
+            autoReturn={restAutoReturn}
+            setDuration={setRestDuration}
+            setRemaining={setRestRemaining}
+            setRunning={setRestRunning}
+            setAutoReturn={setRestAutoReturn}
+          />
+        )}
 
         {view === "nathan" && <NathanView onLoad={loadNathanProgram} isLoaded={program.some((b) => b.nathan)} />}
 
@@ -1535,69 +1683,11 @@ function NavIcon({ type, active }) {
 }
 
 // ---------- Chrono : minuteur de repos entre les séries ----------
-function ChronoView() {
+function ChronoView({ duration, remaining, running, autoReturn, setDuration, setRemaining, setRunning, setAutoReturn }) {
   const PRESETS = [30, 60, 90, 120, 180];
-  const [duration, setDuration] = useState(90);
-  const [remaining, setRemaining] = useState(90);
-  const [running, setRunning] = useState(false);
-  const intervalRef = useRef(null);
-
-  useEffect(() => {
-    if (running) {
-      intervalRef.current = setInterval(() => {
-        setRemaining((r) => {
-          if (r <= 1) {
-            clearInterval(intervalRef.current);
-            setRunning(false);
-            try {
-              if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-            } catch (e) {}
-            playBeep();
-            return 0;
-          }
-          return r - 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(intervalRef.current);
-  }, [running]);
-
-  // "Ding" façon clochette : deux harmoniques (fondamentale + quinte) avec
-  // une attaque nette et une résonance qui s'éteint doucement, joué deux fois.
-  const playBeep = () => {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const ding = (delay) => {
-        const startAt = ctx.currentTime + delay;
-        const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.0001, startAt);
-        gain.gain.exponentialRampToValueAtTime(0.28, startAt + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 1.1);
-        gain.connect(ctx.destination);
-
-        const fundamental = ctx.createOscillator();
-        fundamental.type = "sine";
-        fundamental.frequency.setValueAtTime(1046.5, startAt); // Do6
-        fundamental.connect(gain);
-        fundamental.start(startAt);
-        fundamental.stop(startAt + 1.1);
-
-        const fifth = ctx.createOscillator();
-        fifth.type = "sine";
-        fifth.frequency.setValueAtTime(1568, startAt); // quinte, timbre de clochette
-        const fifthGain = ctx.createGain();
-        fifthGain.gain.setValueAtTime(0.12, startAt);
-        fifthGain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.7);
-        fifth.connect(fifthGain).connect(ctx.destination);
-        fifth.start(startAt);
-        fifth.stop(startAt + 0.7);
-      };
-      ding(0);
-      ding(0.35);
-    } catch (e) {}
-  };
 
   const choosePreset = (s) => {
+    setAutoReturn(false);
     setDuration(s);
     setRemaining(s);
     setRunning(false);
@@ -1619,6 +1709,7 @@ function ChronoView() {
   };
 
   const reset = () => {
+    setAutoReturn(false);
     setRunning(false);
     setRemaining(duration);
   };
@@ -1631,6 +1722,11 @@ function ChronoView() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      {autoReturn && (
+        <div style={{ fontFamily: "Inter", fontSize: 11.5, color: "var(--accent)", fontWeight: 700, marginBottom: 10, textAlign: "center" }}>
+          ⏱ Repos auto — retour à ta séance à la fin
+        </div>
+      )}
       <div className="track-bg" style={{ borderRadius: 20, padding: "30px 20px", width: "100%", display: "flex", flexDirection: "column", alignItems: "center", position: "relative", overflow: "hidden" }}>
         {/* petites touches déco pour ne pas laisser le fond trop vide */}
         <div style={{ position: "absolute", top: 14, left: 16, opacity: 0.22 }}>
