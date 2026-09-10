@@ -704,6 +704,66 @@ const STORAGE_KEY_NOTES = "notes:v3"; // { "2026-08-13": "texte" }
 const STORAGE_KEY_REMINDERS = "reminders:v3"; // { enabled: true }
 const STORAGE_KEY_MILESTONE = "milestone:v3"; // plus haut palier de streak déjà célébré
 const STREAK_MILESTONES = [3, 7, 14, 30, 60, 100, 200, 365];
+const STORAGE_KEY_MEMBER_CODE = "member-code:v1"; // code d'invitation de la personne sur cet appareil
+const STORAGE_KEY_ADMIN_SESSION = "admin-session:v1"; // jeton de session admin (Supabase Auth)
+
+// ---------- Config Supabase (à remplir avec ton propre projet, voir guide) ----------
+// Remplace ces deux valeurs par celles de ton projet Supabase (Project Settings
+// → API). L'URL et la clé "anon" sont publiques par conception — c'est la
+// sécurité RLS côté Supabase qui protège les écritures, pas ces valeurs.
+const SUPABASE_URL = "https://gfdqhklgqeuqjgtxnqaw.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_RbnOmyyrGgAkxp8orYaWGw_vGqhJx1c";
+const SUPABASE_CONFIGURED = !SUPABASE_URL.includes("TON-PROJET") && !SUPABASE_ANON_KEY.includes("TA_CLE_ANON");
+
+async function supabaseRequest(path, { method = "GET", body, token, headers = {} } = {}) {
+  const res = await fetch(`${SUPABASE_URL}${path}`, {
+    method,
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token || SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+      ...headers,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(errText || `Erreur ${res.status}`);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+async function supabaseLogin(email, password) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: { apikey: SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error_description || data.msg || "Connexion refusée");
+  return data; // { access_token, ... }
+}
+
+async function supabaseUploadPdf(file, token) {
+  const path = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_")}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/programmes/${path}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": file.type || "application/pdf",
+    },
+    body: file,
+  });
+  if (!res.ok) throw new Error("Échec de l'envoi du PDF");
+  return `${SUPABASE_URL}/storage/v1/object/public/programmes/${path}`;
+}
+
+function makeInviteCode() {
+  return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
 
 function parseRepsNumber(reps) {
   if (!reps) return null;
@@ -1107,6 +1167,55 @@ export default function SportApp() {
   const [showSplash, setShowSplash] = useState(true);
   const [splashLeaving, setSplashLeaving] = useState(false);
 
+  // ---- Admin (Supabase) : session, membres, invitation reçue ----
+  const [adminToken, setAdminToken] = useState(null);
+  const [memberCode, setMemberCode] = useState(null);
+  const [memberInfo, setMemberInfo] = useState(null);
+  const [memberBanner, setMemberBanner] = useState(false);
+
+  // Au chargement : lien d'invitation dans l'URL (?invite=CODE), sinon code
+  // déjà mémorisé sur cet appareil, sinon session admin déjà ouverte.
+  useEffect(() => {
+    (async () => {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlInvite = urlParams.get("invite");
+        let codeToLoad = urlInvite;
+        if (!codeToLoad) {
+          const saved = await storage.get(STORAGE_KEY_MEMBER_CODE);
+          if (saved) codeToLoad = saved.value;
+        }
+        if (codeToLoad && SUPABASE_CONFIGURED) {
+          setMemberCode(codeToLoad);
+          await storage.set(STORAGE_KEY_MEMBER_CODE, codeToLoad);
+          const rows = await supabaseRequest(`/rest/v1/members?invite_code=eq.${encodeURIComponent(codeToLoad)}&select=*`);
+          if (rows && rows[0]) {
+            setMemberInfo(rows[0]);
+            if (urlInvite) setMemberBanner(true);
+          }
+        }
+      } catch (e) {}
+      try {
+        const savedToken = await storage.get(STORAGE_KEY_ADMIN_SESSION);
+        if (savedToken) setAdminToken(savedToken.value);
+      } catch (e) {}
+    })();
+  }, []);
+
+  const applyMemberProgram = () => {
+    if (!memberInfo) return;
+    let target = null;
+    if (memberInfo.program_key === "nathan") target = NATHAN_PROGRAM;
+    else if (memberInfo.program_key === "david") target = DAVID_PROGRAM;
+    else if (memberInfo.program_key === "custom" && memberInfo.custom_program) target = memberInfo.custom_program;
+    if (!target) return;
+    const withIds = target.map((block) => ({ ...block, id: uid(), exercises: block.exercises.map((ex) => ({ ...ex, id: uid() })) }));
+    setProgram(withIds);
+    persist(STORAGE_KEY_PROGRAM, withIds);
+    setMemberBanner(false);
+    setView("accueil");
+  };
+
   // Chrono de repos partagé dans toute l'app : démarré automatiquement
   // quand on valide une série, avec retour auto à la séance à la fin.
   const [restDuration, setRestDuration] = useState(90);
@@ -1471,6 +1580,8 @@ export default function SportApp() {
     david: "",
     jour: "",
     creer: "",
+    "admin-login": "Espace coach",
+    admin: "Gestion des membres",
   };
 
   return (
@@ -1512,6 +1623,11 @@ export default function SportApp() {
             }}
             onOpenNathan={() => setView("nathan")}
             onOpenDavid={() => setView("david")}
+            onOpenAdmin={() => setView(adminToken ? "admin" : "admin-login")}
+            memberInfo={memberInfo}
+            memberBanner={memberBanner}
+            onApplyMemberProgram={applyMemberProgram}
+            onDismissMemberBanner={() => setMemberBanner(false)}
           />
         )}
 
@@ -1548,6 +1664,27 @@ export default function SportApp() {
         {view === "nathan" && <NathanView onLoad={loadNathanProgram} isLoaded={program.some((b) => b.nathan)} />}
 
         {view === "david" && <DavidView onLoad={loadDavidProgram} isLoaded={program.some((b) => b.david)} />}
+
+        {view === "admin-login" && (
+          <AdminLoginView
+            onLoggedIn={async (token) => {
+              setAdminToken(token);
+              await storage.set(STORAGE_KEY_ADMIN_SESSION, token);
+              setView("admin");
+            }}
+          />
+        )}
+
+        {view === "admin" && (
+          <AdminPanelView
+            token={adminToken}
+            onLogout={async () => {
+              setAdminToken(null);
+              await storage.set(STORAGE_KEY_ADMIN_SESSION, "");
+              setView("accueil");
+            }}
+          />
+        )}
 
         {view === "jour" && (
           <JourView
@@ -2121,8 +2258,8 @@ function MusclesView({ program, validatedDays, today }) {
       </div>
 
       <div style={{ display: "flex", gap: 14, justifyContent: "center", marginTop: 12, marginBottom: 22 }}>
-        <LegendDot color="var(--accent)" label="Aujourd'hui" />
-        <LegendDot color="rgba(243,113,33,0.35)" label="Cette semaine" />
+        <LegendDot color="#FF8A3D" label="Aujourd'hui" />
+        <LegendDot color="rgba(232,54,42,0.4)" label="Cette semaine" />
       </div>
 
       <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 12, letterSpacing: "0.4px", color: "var(--text-muted)", marginBottom: 10, textTransform: "uppercase" }}>
@@ -2172,16 +2309,17 @@ function LegendDot({ color, label }) {
 }
 
 function BodySilhouette({ highlightToday, highlightWeek, width = 180, view = "front" }) {
-  // Base "muscle non travaillé" façon planche anatomique (rouge sourd),
-  // puis la couleur accent vient recouvrir la zone travaillée.
+  // Contours seuls par défaut (pas de remplissage, juste le tracé) — seule
+  // la zone travaillée par l'exercice se colore, en orange/rouge vif.
   const fillFor = (zone) => {
-    if (highlightToday.has(zone)) return "var(--accent)";
-    if (highlightWeek.has(zone)) return "rgba(243,113,33,0.45)";
-    return "url(#muscleRed)";
+    if (highlightToday.has(zone)) return "url(#highlightGrad)";
+    if (highlightWeek.has(zone)) return "rgba(232,54,42,0.4)";
+    return "none";
   };
-  const strokeBase = "#2A1414";
-  const fiberColor = (zone) => (highlightToday.has(zone) ? "#8A4A12" : "#5C1414");
-  const fiberOpacity = (zone) => (highlightToday.has(zone) || highlightWeek.has(zone) ? 0.35 : 0.4);
+  const bodyFill = "none";
+  const strokeBase = "#9AA1A8";
+  const fiberColor = (zone) => (highlightToday.has(zone) ? "#8A2A1A" : "#9AA1A8");
+  const fiberOpacity = (zone) => (highlightToday.has(zone) ? 0.5 : highlightWeek.has(zone) ? 0.35 : 0);
   const height = Math.round(width * (320 / 200));
   const isBack = view === "back";
 
@@ -2190,17 +2328,17 @@ function BodySilhouette({ highlightToday, highlightWeek, width = 180, view = "fr
   // pour distinguer biceps/triceps des avant-bras, et quadriceps/ischios des
   // mollets. Chemins réutilisés pour le remplissage et le découpage des
   // lignes de fibres.
-  const upperArmL = "M63 53 Q40 66 32 108 L47 124 Q52 100 69 67 Z";
+  const upperArmL = "M63 53 Q37 66 30 108 L47 124 Q55 98 69 67 Z";
   const foreArmL = "M32 108 Q28 138 29 168 Q29 178 37 180 Q46 178 44 166 Q47 142 47 124 Z";
-  const upperArmR = "M137 53 Q160 66 168 108 L153 124 Q148 100 131 67 Z";
+  const upperArmR = "M137 53 Q163 66 170 108 L153 124 Q145 98 131 67 Z";
   const foreArmR = "M168 108 Q172 138 171 168 Q171 178 163 180 Q154 178 156 166 Q153 142 153 124 Z";
-  const thighL = "M73 168 L63 232 L87 232 L89 168 Z";
-  const calfL = "M63 232 L60 250 Q56 282 61 306 L83 306 Q87 282 82 250 L87 232 Z";
-  const thighR = "M127 168 L137 232 L113 232 L111 168 Z";
-  const calfR = "M137 232 L140 250 Q144 282 139 306 L117 306 Q113 282 118 250 L113 232 Z";
-  const chest = "M69 63 Q100 76 131 63 L124 100 Q100 110 76 100 Z";
-  const back = "M67 60 Q100 72 133 60 L128 128 Q100 140 72 128 Z";
-  const glutes = "M76 130 Q100 122 124 130 L120 168 Q100 176 80 168 Z";
+  const thighL = "M73 168 Q57 196 63 232 L87 232 Q92 196 89 168 Z";
+  const calfL = "M63 232 L60 250 Q55 282 61 306 L83 306 Q88 282 82 250 L87 232 Z";
+  const thighR = "M127 168 Q143 196 137 232 L113 232 Q108 196 111 168 Z";
+  const calfR = "M137 232 L140 250 Q145 282 139 306 L117 306 Q112 282 118 250 L113 232 Z";
+  const chest = "M69 63 Q100 78 131 63 L124 100 Q100 111 76 100 Z";
+  const back = "M67 60 Q100 74 133 60 L128 128 Q100 141 72 128 Z";
+  const glutes = "M76 130 Q100 121 124 130 L120 168 Q100 177 80 168 Z";
 
   // Selon la vue, le haut du bras est biceps ou triceps, et le haut de la
   // jambe est quadriceps ou ischio-jambiers — même silhouette, autre muscle.
@@ -2210,9 +2348,9 @@ function BodySilhouette({ highlightToday, highlightWeek, width = 180, view = "fr
   return (
     <svg width={width} height={height} viewBox="0 0 200 320">
       <defs>
-        <linearGradient id="muscleRed" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#7A2020" />
-          <stop offset="100%" stopColor="#4E1414" />
+        <linearGradient id="highlightGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#FF8A3D" />
+          <stop offset="100%" stopColor="#E8362A" />
         </linearGradient>
         <clipPath id="clipThighL"><path d={thighL} /></clipPath>
         <clipPath id="clipThighR"><path d={thighR} /></clipPath>
@@ -2229,16 +2367,16 @@ function BodySilhouette({ highlightToday, highlightWeek, width = 180, view = "fr
         <clipPath id="clipShoulderR"><ellipse cx="135" cy="57" rx="15" ry="12" /></clipPath>
       </defs>
 
-      {/* Tête, cou, torse — silhouette de base */}
-      <circle cx="100" cy="24" r="17" fill="#C99A78" stroke={strokeBase} strokeWidth="2" />
-      <rect x="92" y="37" width="16" height="12" fill="#C99A78" stroke={strokeBase} strokeWidth="1.5" />
-      <path d="M62 50 Q100 40 138 50 L131 130 Q100 148 69 130 Z" fill="#C99A78" stroke={strokeBase} strokeWidth="2" />
-      <path d="M69 130 Q100 145 131 130 L126 165 Q100 178 74 165 Z" fill="#C99A78" stroke={strokeBase} strokeWidth="2" />
+      {/* Tête, cou, torse — silhouette de base, même dégradé grisé */}
+      <circle cx="100" cy="24" r="17" fill={bodyFill} stroke={strokeBase} strokeWidth="2" />
+      <rect x="92" y="37" width="16" height="12" fill={bodyFill} stroke={strokeBase} strokeWidth="1.5" />
+      <path d="M62 50 Q100 40 138 50 L131 130 Q100 148 69 130 Z" fill={bodyFill} stroke={strokeBase} strokeWidth="2" />
+      <path d="M69 130 Q100 145 131 130 L126 165 Q100 178 74 165 Z" fill={bodyFill} stroke={strokeBase} strokeWidth="2" />
       {/* Mains et pieds */}
-      <ellipse cx="33" cy="184" rx="9" ry="12" fill="#C99A78" stroke={strokeBase} strokeWidth="1.5" />
-      <ellipse cx="167" cy="184" rx="9" ry="12" fill="#C99A78" stroke={strokeBase} strokeWidth="1.5" />
-      <ellipse cx="72" cy="311" rx="15" ry="7" fill="#C99A78" stroke={strokeBase} strokeWidth="1.5" />
-      <ellipse cx="128" cy="311" rx="15" ry="7" fill="#C99A78" stroke={strokeBase} strokeWidth="1.5" />
+      <ellipse cx="33" cy="184" rx="9" ry="12" fill={bodyFill} stroke={strokeBase} strokeWidth="1.5" />
+      <ellipse cx="167" cy="184" rx="9" ry="12" fill={bodyFill} stroke={strokeBase} strokeWidth="1.5" />
+      <ellipse cx="72" cy="311" rx="15" ry="7" fill={bodyFill} stroke={strokeBase} strokeWidth="1.5" />
+      <ellipse cx="128" cy="311" rx="15" ry="7" fill={bodyFill} stroke={strokeBase} strokeWidth="1.5" />
 
       {/* Cuisses (quadriceps / ischio-jambiers) — agencement parallèle */}
       {[thighL, thighR].map((d, i) => (
@@ -2419,11 +2557,295 @@ function ProgramInfoView({ info, programData, onLoad, isLoaded }) {
   );
 }
 
-function AccueilView({ program, today, streak, validatedDays, remindersEnabled, toggleReminders, onOpenDay, onOpenNathan, onOpenDavid }) {
+// ---------- Connexion admin (Supabase Auth) ----------
+function AdminLoginView({ onLoggedIn }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const handleLogin = async () => {
+    if (!SUPABASE_CONFIGURED) {
+      setError("Configuration Supabase manquante — voir le guide de mise en place.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const data = await supabaseLogin(email.trim(), password);
+      onLoggedIn(data.access_token);
+    } catch (e) {
+      setError(e.message || "Connexion refusée");
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 340, margin: "20px auto 0" }}>
+      <div style={{ textAlign: "center", marginBottom: 6 }}>
+        <div style={{ fontSize: 30 }}>🔐</div>
+        <div style={{ fontFamily: "'Archivo Black', sans-serif", fontSize: 18, color: "var(--text)", marginTop: 6 }}>Espace coach</div>
+        <div style={{ fontFamily: "Inter", fontSize: 11.5, color: "var(--text-muted)", marginTop: 4 }}>Connecte-toi pour gérer tes membres</div>
+      </div>
+
+      {!SUPABASE_CONFIGURED && (
+        <div style={{ background: "var(--surface)", border: "1px solid var(--surface-raised)", borderRadius: 10, padding: 12, fontFamily: "Inter", fontSize: 11.5, color: "var(--text-muted)", lineHeight: 1.5 }}>
+          ⚠️ La config Supabase (URL + clé) n'est pas encore renseignée dans le code (constantes <code>SUPABASE_URL</code> / <code>SUPABASE_ANON_KEY</code>).
+        </div>
+      )}
+
+      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" style={inputStyle} autoCapitalize="none" />
+      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mot de passe" style={inputStyle} onKeyDown={(e) => e.key === "Enter" && handleLogin()} />
+
+      {error && <div style={{ fontFamily: "Inter", fontSize: 11.5, color: "#FF6B5A" }}>{error}</div>}
+
+      <button
+        onClick={handleLogin}
+        disabled={busy}
+        style={{ border: "none", borderRadius: 12, padding: "13px 0", fontFamily: "Inter", fontWeight: 700, fontSize: 13.5, cursor: busy ? "default" : "pointer", background: "var(--accent)", color: "#12161A" }}
+      >
+        {busy ? "Connexion…" : "Se connecter"}
+      </button>
+
+      <div style={{ fontFamily: "Inter", fontSize: 10.5, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.5 }}>
+        Le compte se crée depuis le tableau de bord Supabase (Authentication → Add user), pas ici.
+      </div>
+    </div>
+  );
+}
+
+// ---------- Panneau admin : liste des membres, invitation, programme, PDF ----------
+function AdminPanelView({ token, onLogout }) {
+  const [members, setMembers] = useState([]);
+  const [loadingList, setLoadingList] = useState(true);
+  const [error, setError] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [copiedId, setCopiedId] = useState(null);
+
+  const loadMembers = async () => {
+    setLoadingList(true);
+    try {
+      const rows = await supabaseRequest("/rest/v1/members?select=*&order=created_at.desc", { token });
+      setMembers(rows || []);
+    } catch (e) {
+      setError(e.message);
+    }
+    setLoadingList(false);
+  };
+
+  useEffect(() => {
+    if (SUPABASE_CONFIGURED && token) loadMembers();
+  }, [token]);
+
+  const addMember = async () => {
+    if (!name.trim() || !email.trim()) return;
+    try {
+      const code = makeInviteCode();
+      await supabaseRequest("/rest/v1/members", {
+        method: "POST",
+        token,
+        body: { invite_code: code, name: name.trim(), email: email.trim(), program_key: "aucun" },
+      });
+      setName("");
+      setEmail("");
+      setShowAdd(false);
+      loadMembers();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const updateMember = async (id, patch) => {
+    try {
+      await supabaseRequest(`/rest/v1/members?id=eq.${id}`, { method: "PATCH", token, body: patch });
+      loadMembers();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const deleteMember = async (id) => {
+    try {
+      await supabaseRequest(`/rest/v1/members?id=eq.${id}`, { method: "DELETE", token });
+      loadMembers();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const uploadPdf = async (id, file) => {
+    try {
+      const url = await supabaseUploadPdf(file, token);
+      await updateMember(id, { pdf_url: url, pdf_name: file.name });
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const inviteText = (m) => {
+    const link = `${window.location.origin}${window.location.pathname}?invite=${m.invite_code}`;
+    return `Salut ${m.name} ! Voici ton programme : ${link}`;
+  };
+
+  const copyInvite = (m) => {
+    navigator.clipboard?.writeText(inviteText(m));
+    setCopiedId(m.id);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
+
+  if (!SUPABASE_CONFIGURED) {
+    return (
+      <div style={{ background: "var(--surface)", borderRadius: 12, padding: 16, fontFamily: "Inter", fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.6 }}>
+        ⚠️ Configuration Supabase manquante. Renseigne <code>SUPABASE_URL</code> et <code>SUPABASE_ANON_KEY</code> en haut du fichier, après avoir créé ton projet Supabase et exécuté le script SQL fourni.
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+        <button onClick={onLogout} style={{ border: "none", background: "none", color: "var(--text-muted)", fontFamily: "Inter", fontSize: 11.5, cursor: "pointer", textDecoration: "underline" }}>
+          Se déconnecter
+        </button>
+      </div>
+
+      {error && (
+        <div style={{ background: "rgba(255,107,90,0.1)", border: "1px solid #FF6B5A", borderRadius: 10, padding: 10, marginBottom: 12, fontFamily: "Inter", fontSize: 11.5, color: "#FF6B5A" }}>
+          {error}
+        </div>
+      )}
+
+      {!showAdd ? (
+        <button onClick={() => setShowAdd(true)} style={createBtnStyle}>+ Inviter une personne</button>
+      ) : (
+        <div style={{ background: "var(--surface)", borderRadius: 12, padding: 14, marginBottom: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom" style={inputStyle} />
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" style={inputStyle} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={addMember} style={{ flex: 1, border: "none", borderRadius: 10, padding: "10px 0", fontFamily: "Inter", fontWeight: 700, fontSize: 12.5, cursor: "pointer", background: "var(--accent)", color: "#12161A" }}>
+              Créer l'invitation
+            </button>
+            <button onClick={() => setShowAdd(false)} style={{ border: "none", borderRadius: 10, padding: "10px 14px", fontFamily: "Inter", fontSize: 12.5, cursor: "pointer", background: "var(--surface-raised)", color: "var(--text)" }}>
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+        {loadingList && <div style={{ fontFamily: "Inter", fontSize: 12, color: "var(--text-muted)" }}>Chargement…</div>}
+        {!loadingList && members.length === 0 && (
+          <div style={{ fontFamily: "Inter", fontSize: 12, color: "var(--text-muted)", textAlign: "center", padding: 20 }}>Aucun membre pour l'instant.</div>
+        )}
+        {members.map((m) => (
+          <div key={m.id} style={{ background: "var(--surface)", borderRadius: 12, padding: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 13.5, color: "var(--text)" }}>{m.name}</div>
+                <div style={{ fontFamily: "Inter", fontSize: 11, color: "var(--text-muted)" }}>{m.email}</div>
+              </div>
+              <button onClick={() => deleteMember(m.id)} style={{ border: "none", background: "none", color: "var(--text-muted)", fontSize: 11, cursor: "pointer", textDecoration: "underline" }}>
+                Supprimer
+              </button>
+            </div>
+
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+              {[
+                { key: "aucun", label: "Aucun" },
+                { key: "nathan", label: "NathanFourmi" },
+                { key: "david", label: "DavidFourmi" },
+              ].map((p) => (
+                <button
+                  key={p.key}
+                  onClick={() => updateMember(m.id, { program_key: p.key })}
+                  style={{
+                    border: "none",
+                    borderRadius: 16,
+                    padding: "6px 12px",
+                    fontFamily: "Inter",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    background: m.program_key === p.key ? "var(--accent)" : "var(--surface-raised)",
+                    color: m.program_key === p.key ? "#12161A" : "var(--text-muted)",
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+              <label style={{ flex: 1, border: "1px dashed var(--surface-raised)", borderRadius: 10, padding: "8px 10px", fontFamily: "Inter", fontSize: 11, color: "var(--text-muted)", cursor: "pointer", textAlign: "center" }}>
+                {m.pdf_name ? `📄 ${m.pdf_name}` : "📄 Joindre un PDF"}
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  style={{ display: "none" }}
+                  onChange={(e) => e.target.files[0] && uploadPdf(m.id, e.target.files[0])}
+                />
+              </label>
+            </div>
+
+            <button
+              onClick={() => copyInvite(m)}
+              style={{ width: "100%", marginTop: 10, border: "none", borderRadius: 10, padding: "9px 0", fontFamily: "Inter", fontWeight: 700, fontSize: 12, cursor: "pointer", background: "var(--surface-raised)", color: "var(--accent)" }}
+            >
+              {copiedId === m.id ? "✓ Copié — colle-le dans ton email/SMS" : "🔗 Copier le lien d'invitation"}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+function AccueilView({ program, today, streak, validatedDays, remindersEnabled, toggleReminders, onOpenDay, onOpenNathan, onOpenDavid, onOpenAdmin, memberInfo, memberBanner, onApplyMemberProgram, onDismissMemberBanner }) {
   const [showCalendar, setShowCalendar] = useState(false);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {memberBanner && memberInfo && (
+        <div
+          style={{
+            border: "1px solid var(--accent)",
+            borderRadius: 14,
+            padding: "14px",
+            marginBottom: 2,
+            background: "linear-gradient(120deg, rgba(243,113,33,0.16), rgba(243,113,33,0.03))",
+          }}
+        >
+          <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 13.5, color: "var(--text)", marginBottom: 4 }}>
+            👋 Salut {memberInfo.name} !
+          </div>
+          <div style={{ fontFamily: "Inter", fontSize: 12, color: "var(--text-muted)", marginBottom: 10, lineHeight: 1.4 }}>
+            Ton coach t'a assigné un programme{memberInfo.pdf_url ? " avec un PDF" : ""}.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={onApplyMemberProgram}
+              style={{ flex: 1, border: "none", borderRadius: 10, padding: "10px 0", fontFamily: "Inter", fontWeight: 700, fontSize: 12.5, cursor: "pointer", background: "var(--accent)", color: "#12161A" }}
+            >
+              Charger mon programme
+            </button>
+            {memberInfo.pdf_url && (
+              <a
+                href={memberInfo.pdf_url}
+                target="_blank"
+                rel="noreferrer"
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--surface-raised)", borderRadius: 10, padding: "10px 14px", fontFamily: "Inter", fontWeight: 600, fontSize: 12.5, color: "var(--text)", textDecoration: "none" }}
+              >
+                📄 PDF
+              </a>
+            )}
+            <button onClick={onDismissMemberBanner} style={{ border: "none", background: "none", color: "var(--text-muted)", fontSize: 16, cursor: "pointer" }} aria-label="Fermer">✕</button>
+          </div>
+        </div>
+      )}
+
       <button
         onClick={onOpenNathan}
         style={{
@@ -2589,6 +3011,13 @@ function AccueilView({ program, today, streak, validatedDays, remindersEnabled, 
           </button>
         );
       })}
+
+      <button
+        onClick={onOpenAdmin}
+        style={{ border: "none", background: "none", color: "var(--text-muted)", fontFamily: "Inter", fontSize: 10.5, marginTop: 10, cursor: "pointer", opacity: 0.6, alignSelf: "center" }}
+      >
+        ⚙️ Espace coach
+      </button>
     </div>
   );
 }
