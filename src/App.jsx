@@ -2846,52 +2846,6 @@ function AccueilView({ program, today, streak, validatedDays, remindersEnabled, 
         </div>
       )}
 
-      <button
-        onClick={onOpenNathan}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          border: "1px solid rgba(243,113,33,0.3)",
-          borderRadius: 14,
-          padding: "12px 14px",
-          marginBottom: 2,
-          background: "linear-gradient(120deg, rgba(243,113,33,0.12), rgba(243,113,33,0.02))",
-          cursor: "pointer",
-          textAlign: "left",
-        }}
-      >
-        <span style={{ fontSize: 22 }}>📋</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 13, color: "var(--text)" }}>Programme de NathanFourmi</div>
-          <div style={{ fontFamily: "Inter", fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>Cycle 6 semaines · 4 séances · toutes les consignes</div>
-        </div>
-        <span style={{ color: "var(--accent)", fontSize: 16 }}>→</span>
-      </button>
-
-      <button
-        onClick={onOpenDavid}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          border: "1px solid rgba(243,113,33,0.3)",
-          borderRadius: 14,
-          padding: "12px 14px",
-          marginBottom: 2,
-          background: "linear-gradient(120deg, rgba(243,113,33,0.12), rgba(243,113,33,0.02))",
-          cursor: "pointer",
-          textAlign: "left",
-        }}
-      >
-        <span style={{ fontSize: 22 }}>📋</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 13, color: "var(--text)" }}>Programme de DavidFourmi</div>
-          <div style={{ fontFamily: "Inter", fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>Cycle 6 semaines · 4 séances · toutes les consignes</div>
-        </div>
-        <span style={{ color: "var(--accent)", fontSize: 16 }}>→</span>
-      </button>
-
       <div
         style={{
           borderRadius: 16,
