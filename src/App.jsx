@@ -706,6 +706,9 @@ const STORAGE_KEY_MILESTONE = "milestone:v3"; // plus haut palier de streak déj
 const STREAK_MILESTONES = [3, 7, 14, 30, 60, 100, 200, 365];
 const STORAGE_KEY_MEMBER_CODE = "member-code:v1"; // code d'invitation de la personne sur cet appareil
 const STORAGE_KEY_ADMIN_SESSION = "admin-session:v1"; // jeton de session admin (Supabase Auth)
+const STORAGE_KEY_WATER = "water:v1"; // { "2026-09-12": 3 } — nombre de gourdes de 500ml par jour
+const WATER_GOAL_BOTTLES = 4; // 4 × 500ml = 2L par jour
+const WATER_BOTTLE_ML = 500;
 
 // ---------- Config Supabase (à remplir avec ton propre projet, voir guide) ----------
 // Remplace ces deux valeurs par celles de ton projet Supabase (Project Settings
@@ -1161,6 +1164,17 @@ export default function SportApp() {
   const [notes, setNotes] = useState({});
   const [remindersEnabled, setRemindersEnabled] = useState(false);
   const [milestoneSeen, setMilestoneSeen] = useState(0);
+  const [waterIntake, setWaterIntake] = useState({});
+
+  const todayWaterCount = waterIntake[todayISO()] || 0;
+  const setWaterFor = (count) => {
+    const clamped = Math.max(0, count);
+    const next = { ...waterIntake, [todayISO()]: clamped };
+    setWaterIntake(next);
+    persist(STORAGE_KEY_WATER, next);
+  };
+  const addBottle = () => setWaterFor(todayWaterCount + 1);
+  const removeBottle = () => setWaterFor(todayWaterCount - 1);
   const [celebrating, setCelebrating] = useState(null);
   const [pendingDetail, setPendingDetail] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1382,6 +1396,10 @@ export default function SportApp() {
       try {
         const ms = await storage.get(STORAGE_KEY_MILESTONE);
         if (ms) setMilestoneSeen(JSON.parse(ms.value));
+      } catch (e) {}
+      try {
+        const w = await storage.get(STORAGE_KEY_WATER);
+        if (w) setWaterIntake(JSON.parse(w.value));
       } catch (e) {}
       setLoading(false);
     })();
@@ -1697,6 +1715,10 @@ export default function SportApp() {
             waterEnabled={waterEnabled}
             waterRemaining={waterRemaining}
             onToggleWater={toggleWaterReminder}
+            bottleCount={todayWaterCount}
+            onSetBottles={setWaterFor}
+            onAddBottle={addBottle}
+            onRemoveBottle={removeBottle}
           />
         )}
 
@@ -1882,7 +1904,33 @@ function NavIcon({ type, active }) {
 }
 
 // ---------- Chrono : minuteur de repos entre les séries ----------
-function ChronoView({ duration, remaining, running, autoReturn, setDuration, setRemaining, setRunning, setAutoReturn, waterEnabled, waterRemaining, onToggleWater }) {
+// Gourde de sport façon Basic-Fit : silhouette large, bouchon vissé, anse —
+// remplie en orange quand elle est comptée, contour seul sinon.
+function BottleIcon({ filled, size = 30 }) {
+  const fillColor = filled ? "var(--accent)" : "none";
+  const strokeColor = filled ? "var(--accent-dark)" : "var(--text-muted)";
+  return (
+    <svg width={size} height={size * 1.3} viewBox="0 0 40 52">
+      {/* bouchon */}
+      <rect x="15" y="2" width="10" height="6" rx="1.5" fill={fillColor} stroke={strokeColor} strokeWidth="2" />
+      {/* col */}
+      <rect x="16" y="8" width="8" height="7" fill={fillColor} stroke={strokeColor} strokeWidth="2" />
+      {/* corps de la gourde */}
+      <path
+        d="M12 15 H28 Q30 15 30 18 L30 44 Q30 50 20 50 Q10 50 10 44 L10 18 Q10 15 12 15 Z"
+        fill={fillColor}
+        stroke={strokeColor}
+        strokeWidth="2"
+      />
+      {/* anse */}
+      <path d="M27 20 Q34 22 34 28 Q34 33 28 33" fill="none" stroke={strokeColor} strokeWidth="2" strokeLinecap="round" />
+      {/* bande façon logo, seulement visible quand pleine */}
+      {filled && <rect x="10" y="30" width="20" height="5" fill="#12161A" opacity="0.18" />}
+    </svg>
+  );
+}
+
+function ChronoView({ duration, remaining, running, autoReturn, setDuration, setRemaining, setRunning, setAutoReturn, waterEnabled, waterRemaining, onToggleWater, bottleCount, onSetBottles, onAddBottle, onRemoveBottle }) {
   const PRESETS = [30, 60, 90, 120, 180];
 
   const choosePreset = (s) => {
@@ -2015,6 +2063,37 @@ function ChronoView({ duration, remaining, running, autoReturn, setDuration, set
             {s === 180 ? "3min" : `${s}s`}
           </button>
         ))}
+      </div>
+
+      {/* Suivi d'eau — gourdes de 500ml, façon compteur Yazio */}
+      <div style={{ width: "100%", background: "var(--surface)", borderRadius: 14, padding: "16px", marginTop: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+          <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 13, color: "var(--text)" }}>💧 Suivi d'eau</div>
+          <div style={{ fontFamily: "'Roboto Mono', monospace", fontSize: 12, color: "var(--accent)", fontWeight: 700 }}>
+            {bottleCount * WATER_BOTTLE_ML} / {WATER_GOAL_BOTTLES * WATER_BOTTLE_ML} ml
+          </div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+          {Array.from({ length: Math.max(bottleCount, WATER_GOAL_BOTTLES) }).map((_, i) => (
+            <button
+              key={i}
+              onClick={() => onSetBottles(i < bottleCount ? i : i + 1)}
+              style={{ border: "none", background: "none", cursor: "pointer", padding: 2 }}
+              aria-label={`${i + 1} gourde${i > 0 ? "s" : ""}`}
+            >
+              <BottleIcon filled={i < bottleCount} size={30} />
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14 }}>
+          <button onClick={onRemoveBottle} disabled={bottleCount === 0} style={{ ...roundBtnStyle, opacity: bottleCount === 0 ? 0.4 : 1, width: 36, height: 36, padding: 0, fontSize: 16 }}>−</button>
+          <span style={{ fontFamily: "Inter", fontSize: 11.5, color: "var(--text-muted)" }}>
+            {bottleCount} gourde{bottleCount > 1 ? "s" : ""} (500 ml)
+          </span>
+          <button onClick={onAddBottle} style={{ ...roundBtnStyle, width: 36, height: 36, padding: 0, fontSize: 16, background: "var(--accent)", color: "#12161A" }}>+</button>
+        </div>
       </div>
 
       {/* Rappel eau — repère toutes les 20 minutes, indépendant du repos entre séries */}
