@@ -1300,6 +1300,42 @@ export default function SportApp() {
     setView("chrono");
   };
 
+  // ---- Rappel eau : se répète automatiquement toutes les 20 minutes,
+  // indépendamment du chrono de repos, jusqu'à ce qu'on le désactive. ----
+  const WATER_INTERVAL = 20 * 60;
+  const [waterEnabled, setWaterEnabled] = useState(false);
+  const [waterRemaining, setWaterRemaining] = useState(WATER_INTERVAL);
+  const [waterAlert, setWaterAlert] = useState(false);
+  const waterIntervalRef = useRef(null);
+
+  useEffect(() => {
+    if (waterEnabled) {
+      waterIntervalRef.current = setInterval(() => {
+        setWaterRemaining((r) => {
+          if (r <= 1) {
+            try {
+              if (navigator.vibrate) navigator.vibrate([150, 80, 150, 80, 150]);
+            } catch (e) {}
+            playDing();
+            setWaterAlert(true);
+            setTimeout(() => setWaterAlert(false), 5000);
+            return WATER_INTERVAL;
+          }
+          return r - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(waterIntervalRef.current);
+  }, [waterEnabled]);
+
+  const toggleWaterReminder = () => {
+    setWaterEnabled((e) => {
+      const next = !e;
+      if (next) setWaterRemaining(WATER_INTERVAL);
+      return next;
+    });
+  };
+
   useEffect(() => {
     const t1 = setTimeout(() => setSplashLeaving(true), 2900);
     const t2 = setTimeout(() => setShowSplash(false), 3300);
@@ -1658,6 +1694,9 @@ export default function SportApp() {
             setRemaining={setRestRemaining}
             setRunning={setRestRunning}
             setAutoReturn={setRestAutoReturn}
+            waterEnabled={waterEnabled}
+            waterRemaining={waterRemaining}
+            onToggleWater={toggleWaterReminder}
           />
         )}
 
@@ -1714,6 +1753,29 @@ export default function SportApp() {
 
       <BottomNav active={tabViews.includes(view) ? view : null} onChange={(v) => { setPendingDetail(null); setView(v); }} />
       {celebrating && <MilestoneCelebration milestone={celebrating} onClose={() => setCelebrating(null)} />}
+      {waterAlert && (
+        <div
+          className="modal-pop"
+          style={{
+            position: "fixed",
+            bottom: 90,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 60,
+            background: "linear-gradient(120deg, var(--accent), var(--accent-dark))",
+            color: "#12161A",
+            borderRadius: 14,
+            padding: "12px 20px",
+            fontFamily: "Inter",
+            fontWeight: 700,
+            fontSize: 13.5,
+            boxShadow: "0 8px 24px rgba(243,113,33,0.35)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          💧 Tu peux aller boire de l'eau !
+        </div>
+      )}
     </div>
   );
 }
@@ -1820,7 +1882,7 @@ function NavIcon({ type, active }) {
 }
 
 // ---------- Chrono : minuteur de repos entre les séries ----------
-function ChronoView({ duration, remaining, running, autoReturn, setDuration, setRemaining, setRunning, setAutoReturn }) {
+function ChronoView({ duration, remaining, running, autoReturn, setDuration, setRemaining, setRunning, setAutoReturn, waterEnabled, waterRemaining, onToggleWater }) {
   const PRESETS = [30, 60, 90, 120, 180];
 
   const choosePreset = (s) => {
@@ -1953,6 +2015,51 @@ function ChronoView({ duration, remaining, running, autoReturn, setDuration, set
             {s === 180 ? "3min" : `${s}s`}
           </button>
         ))}
+      </div>
+
+      {/* Rappel eau — repère toutes les 20 minutes, indépendant du repos entre séries */}
+      <div style={{ width: "100%", background: "var(--surface)", borderRadius: 14, padding: "14px 16px", marginTop: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 20 }}>💧</span>
+            <div>
+              <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 13, color: "var(--text)" }}>Rappel eau</div>
+              <div style={{ fontFamily: "Inter", fontSize: 11, color: "var(--text-muted)" }}>
+                {waterEnabled
+                  ? `Prochain rappel dans ${String(Math.floor(waterRemaining / 60)).padStart(2, "0")}:${String(waterRemaining % 60).padStart(2, "0")}`
+                  : "Se répète toutes les 20 min"}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={onToggleWater}
+            style={{
+              width: 38,
+              height: 22,
+              borderRadius: 12,
+              border: "none",
+              background: waterEnabled ? "var(--accent)" : "var(--surface-raised)",
+              position: "relative",
+              cursor: "pointer",
+              transition: "background 0.2s ease",
+              flexShrink: 0,
+            }}
+            aria-label="Activer le rappel eau"
+          >
+            <span
+              style={{
+                position: "absolute",
+                top: 2,
+                left: waterEnabled ? 18 : 2,
+                width: 18,
+                height: 18,
+                borderRadius: "50%",
+                background: waterEnabled ? "#12161A" : "var(--text-muted)",
+                transition: "left 0.2s ease",
+              }}
+            />
+          </button>
+        </div>
       </div>
 
       <ChronoQuote />
