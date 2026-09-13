@@ -806,24 +806,26 @@ function todayWeekdayFR() {
   return WEEKDAYS[idx];
 }
 
-// ---------- Week helpers, for the "Semaine 1 / Semaine 2..." progression view ----------
-function isoWeekKey(dateStr) {
+// ---------- Month helpers, for the "Sept. 2026 / Oct. 2026..." progression view ----------
+const MONTH_LABELS = ["Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."];
+
+function monthKey(dateStr) {
   const d = new Date(dateStr + "T00:00:00");
-  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
-  const yearStart = new Date(d.getFullYear(), 0, 1);
-  const weekNo = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
-  return `${d.getFullYear()}-W${weekNo}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-// Collapses a raw {date, weight} history into one point per calendar week
-// (keeping the latest weight logged that week), then labels them
-// chronologically as "Semaine 1", "Semaine 2"... the way the user thinks about it.
+// Collapses a raw {date, weight} history into one point per calendar month
+// (keeping the latest weight logged that month), labelled with the real
+// month name so it's immediately readable ("Sept. 2026").
 function weeklySeries(history) {
-  const byWeek = new Map();
+  const byMonth = new Map();
   for (const h of [...history].sort((a, b) => (a.date < b.date ? -1 : 1))) {
-    byWeek.set(isoWeekKey(h.date), { ...h });
+    byMonth.set(monthKey(h.date), { ...h });
   }
-  return Array.from(byWeek.values()).map((h, i) => ({ ...h, label: `Semaine ${i + 1}` }));
+  return Array.from(byMonth.entries()).map(([key, h]) => {
+    const [year, month] = key.split("-");
+    return { ...h, label: `${MONTH_LABELS[Number(month) - 1]} ${year}` };
+  });
 }
 
 // ---------- Logo de l'application ----------
@@ -1223,7 +1225,10 @@ export default function SportApp() {
     else if (memberInfo.program_key === "david") target = DAVID_PROGRAM;
     else if (memberInfo.program_key === "custom" && memberInfo.custom_program) target = memberInfo.custom_program;
     if (!target) return;
-    const withIds = target.map((block) => ({ ...block, id: uid(), exercises: block.exercises.map((ex) => ({ ...ex, id: uid() })) }));
+    // On garde les id d'origine des exercices (pas de uid() ici) : ce sont
+    // ces id qui servent de clé pour retrouver le poids déjà enregistré la
+    // dernière fois, y compris quand ce même programme est rechargé plus tard.
+    const withIds = target.map((block) => ({ ...block, id: uid(), exercises: block.exercises.map((ex) => ({ ...ex })) }));
     setProgram(withIds);
     persist(STORAGE_KEY_PROGRAM, withIds);
     setMemberBanner(false);
@@ -1333,6 +1338,11 @@ export default function SportApp() {
             playDing();
             setWaterAlert(true);
             setTimeout(() => setWaterAlert(false), 5000);
+            try {
+              if ("Notification" in window && Notification.permission === "granted") {
+                new Notification("💧 C'est l'heure de boire !", { body: "Tu peux aller remplir ta gourde au distributeur." });
+              }
+            } catch (e) {}
             return WATER_INTERVAL;
           }
           return r - 1;
@@ -1342,12 +1352,15 @@ export default function SportApp() {
     return () => clearInterval(waterIntervalRef.current);
   }, [waterEnabled]);
 
-  const toggleWaterReminder = () => {
-    setWaterEnabled((e) => {
-      const next = !e;
-      if (next) setWaterRemaining(WATER_INTERVAL);
-      return next;
-    });
+  const toggleWaterReminder = async () => {
+    const next = !waterEnabled;
+    if (next && "Notification" in window && Notification.permission === "default") {
+      try {
+        await Notification.requestPermission();
+      } catch (e) {}
+    }
+    setWaterEnabled(next);
+    if (next) setWaterRemaining(WATER_INTERVAL);
   };
 
   useEffect(() => {
@@ -1494,11 +1507,14 @@ export default function SportApp() {
     persist(STORAGE_KEY_PROGRAM, next);
   };
 
+  // On garde les id d'origine des exercices (pas de nouveau uid() par
+  // exercice) : ce sont ces id qui servent de clé pour retrouver le poids
+  // déjà enregistré, y compris quand ce même programme est rechargé plus tard.
   const loadNathanProgram = () => {
     const withGeneratedIds = NATHAN_PROGRAM.map((block) => ({
       ...block,
       id: uid(),
-      exercises: block.exercises.map((ex) => ({ ...ex, id: uid() })),
+      exercises: block.exercises.map((ex) => ({ ...ex })),
     }));
     setProgram(withGeneratedIds);
     persist(STORAGE_KEY_PROGRAM, withGeneratedIds);
@@ -1509,7 +1525,7 @@ export default function SportApp() {
     const withGeneratedIds = DAVID_PROGRAM.map((block) => ({
       ...block,
       id: uid(),
-      exercises: block.exercises.map((ex) => ({ ...ex, id: uid() })),
+      exercises: block.exercises.map((ex) => ({ ...ex })),
     }));
     setProgram(withGeneratedIds);
     persist(STORAGE_KEY_PROGRAM, withGeneratedIds);
@@ -3926,7 +3942,7 @@ function EvolutionPanel({ exercise, weightValue, setWeight, history, logEvolutio
       )}
 
       <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 12, letterSpacing: "0.4px", color: "var(--text-muted)", marginBottom: 10, textTransform: "uppercase" }}>
-        Progression par semaine
+        Progression par mois
       </div>
       <div className="track-bg" style={{ borderRadius: 16, padding: "16px 14px 10px", position: "relative", overflow: "hidden" }}>
         <ProgressionChart weeks={weeks} />
@@ -3970,7 +3986,7 @@ function ProgressionChart({ weeks }) {
           <g key={i}>
             <circle cx={p.x} cy={p.y} r="4" fill="var(--accent)" stroke="var(--surface)" strokeWidth="1.5" />
             <text x={p.x} y={H - padB + 14} fontSize="8.5" fill="var(--text-muted)" fontFamily="Inter" textAnchor="middle">
-              {p.label.replace("Semaine ", "S")}
+              {p.label.replace(/\s\d{4}$/, "")}
             </text>
           </g>
         ))}
